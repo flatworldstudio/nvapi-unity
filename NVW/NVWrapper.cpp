@@ -482,7 +482,10 @@ NvAPI_Status SetBlend(NV_MOSAIC_GRID_TOPO topo) {
 
 		const int Steps = 256;
 		//float BlendGamma = 0.5f;
-		float BlendGamma = 0.454f;
+	//	float BlendGamma = 0.454f;
+		
+		float BlendGamma = 1.0f;
+
 		float intensityTexture0[Steps * 3];
 		float intensityTexture1[Steps * 3];
 
