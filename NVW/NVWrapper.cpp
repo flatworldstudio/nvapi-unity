@@ -473,186 +473,110 @@ NvAPI_Status SetBlend(NV_MOSAIC_GRID_TOPO topo) {
 
 	NV_SCANOUT_INTENSITY_DATA intensityData0, intensityData1;
 
-	// Find overlap.
+	const int Steps = 512;
 
-	if (topo.displayCount == 2 && topo.columns == 2) {
-		// horizontal
-		NvS32 overlapx = (float)topo.displays[1].overlapX;
-		NvU32 width = topo.displaySettings.width;
-
-		const int Steps = 256;
-		//float BlendGamma = 0.5f;
-	//	float BlendGamma = 0.454f;
-		
-		float BlendGamma = 1.0f;
-
-		float intensityTexture0[Steps * 3];
-		float intensityTexture1[Steps * 3];
-
-		float treshold0 = (float)(width - overlapx);
-		float treshold1 = (float)(overlapx);
-
-		float value;
-		float step = width / (float)Steps;
-
-		float offsetTexture[4] = { 0.0f, 0.0f, 0.0f,0.0f };
-
-		for (int i = 0; i < Steps; i++) {
-
-			float x = i * step;
-
-			value = x < treshold0 ? 1.0f : pow(1 - ((x - treshold0) / overlapx), BlendGamma);
-
-		//	value = pow(1 - ((x - treshold0) / overlapx), BlendGamma);
-
-			intensityTexture0[i * 3 + 0] = value;
-			intensityTexture0[i * 3 + 1] = value;
-			intensityTexture0[i * 3 + 2] = value;
-
-			value = x > treshold1 ? 1.0f : pow( x / overlapx,BlendGamma);
-
-			intensityTexture1[i * 3 + 0] = value;
-			intensityTexture1[i * 3 + 1] = value;
-			intensityTexture1[i * 3 + 2] = value;
-		}
-
-		intensityData0.version = NV_SCANOUT_INTENSITY_DATA_VER;
-		intensityData0.width = Steps;
-		intensityData0.height = 1;
-		intensityData0.blendingTexture = intensityTexture0;
-		//	intensityData0.blendingTexture = NULL;
-		intensityData0.offsetTexture = NULL;
-		intensityData0.offsetTexChannels = 1;
-
-		intensityData1.version = NV_SCANOUT_INTENSITY_DATA_VER;
-		intensityData1.width = Steps;
-		intensityData1.height = 1;
-		intensityData1.blendingTexture = intensityTexture1;
-		//	intensityData1.blendingTexture = NULL;
-		intensityData1.offsetTexture = NULL;
-		intensityData1.offsetTexChannels = 1;
-
-		int sticky;
-
-		// This call does the intensity map
-
-		error = NvAPI_GPU_SetScanoutIntensity(topo.displays[0].displayId, &intensityData0, &sticky);
-
-		if (error != NVAPI_OK)
-		{
-			return	error;
-		}
-
-		error = NvAPI_GPU_SetScanoutIntensity(topo.displays[1].displayId, &intensityData1, &sticky);
-
-		if (error != NVAPI_OK)
-		{
-			return	error;
-		}
-
-	}
-
-
-
-	return error;
-	/*
-
-
-	const int Steps = 256;
-	float BlendGamma = 0.5f;
-
-	float intensityTexture0[Steps * 3];
-	float intensityTexture1[Steps * 3];
-
-	//	int width = Steps*BlendFactor;
-
-	int treshold0 = Steps - BlendSteps;
-	int treshold1 = BlendSteps;
-
-	float value;
-
-	for (int i = 0; i < Steps; i++) {
-
-		if (i < treshold0) {
-			value = 1.0f;
-
-			intensityTexture0[i * 3 + 0] = value;
-			intensityTexture0[i * 3 + 1] = value;
-			intensityTexture0[i * 3 + 2] = value;
-		}
-		else {
-
-			//	value = 1.0f - (pow((i - treshold)*(1.0f / width), 2.0f));
-			value = (pow(1 - ((i - treshold0)*(1.0f / BlendSteps)), BlendGamma));
-
-			intensityTexture0[i * 3 + 0] = value;
-			intensityTexture0[i * 3 + 1] = value;
-			intensityTexture0[i * 3 + 2] = value;
-		}
-
-		if (i > treshold1) {
-			value = 1.0f;
-
-			intensityTexture1[i * 3 + 0] = value;
-			intensityTexture1[i * 3 + 1] = value;
-			intensityTexture1[i * 3 + 2] = value;
-		}
-		else {
-
-			//	value = 1.0f - (pow((i - treshold)*(1.0f / width), 2.0f));
-			value = (pow((i)*(1.0f / BlendSteps), BlendGamma));
-
-			intensityTexture1[i * 3 + 0] = value;
-			intensityTexture1[i * 3 + 1] = value;
-			intensityTexture1[i * 3 + 2] = value;
-		}
-
-
-	}
-
-	float offsetTexture[4] = { 0.0f, 0.0f, 0.0f,0.0f };
+	NvS32 overlap;
+	NvU32 size;
 
 	intensityData0.version = NV_SCANOUT_INTENSITY_DATA_VER;
-	intensityData0.width = Steps;
-	intensityData0.height = 1;
-	intensityData0.blendingTexture = intensityTexture0;
 	intensityData0.offsetTexture = NULL;
 	intensityData0.offsetTexChannels = 1;
 
 	intensityData1.version = NV_SCANOUT_INTENSITY_DATA_VER;
-	intensityData1.width = Steps;
-	intensityData1.height = 1;
-	intensityData1.blendingTexture = intensityTexture1;
 	intensityData1.offsetTexture = NULL;
 	intensityData1.offsetTexChannels = 1;
 
+	// Find overlap.
 
-	int sticky = 0;
+	if (topo.displayCount == 2 && topo.columns == 2) {
+
+		overlap = topo.displays[1].overlapX;
+		size = topo.displaySettings.width;
+		intensityData0.width = Steps;
+		intensityData0.height = 1;
+		intensityData1.width = Steps;
+		intensityData1.height = 1;
+
+	}
+
+	if (topo.displayCount == 2 && topo.rows == 2) {
+
+		overlap = topo.displays[1].overlapY;
+		size = topo.displaySettings.height;
+		intensityData0.width = 1;
+		intensityData0.height = Steps;
+		intensityData1.width = 1;
+		intensityData1.height = Steps;
+
+	}
+
+	//if (topo.displayCount == 2 && topo.columns == 2) {
+	//	// horizontal
+	//	NvS32 overlapx = topo.displays[1].overlapX;
+	//	NvU32 width = topo.displaySettings.width;
+
+
+	//float BlendGamma = 0.5f;
+	//float BlendGamma = 0.454f;
+
+	float BlendGamma = 1.0f;
+
+	float intensityTexture0[Steps * 3];
+	float intensityTexture1[Steps * 3];
+
+	float treshold0 = (float)(size - overlap);
+	float step = (float)size / (float)Steps;
+	float treshold1 = (float)(overlap)-step;
+
+	float value;
+
+	float offsetTexture[4] = { 0.0f, 0.0f, 0.0f,0.0f };
+
+	for (int i = 0; i < Steps; i++) {
+
+		float x = i * step;
+
+		value = x < treshold0 ? 1.0f : pow(1 - ((x - treshold0) / overlap), BlendGamma);
+		//value = x < treshold0 ? 1.0f :1 - ((x - treshold0) / overlapx);
+
+	//	value = pow(1 - ((x - treshold0) / overlapx), BlendGamma);
+
+		intensityTexture0[i * 3 + 0] = value;
+		intensityTexture0[i * 3 + 1] = value;
+		intensityTexture0[i * 3 + 2] = value;
+
+		value = x > treshold1 ? 1.0f : pow((x + step) / overlap, BlendGamma);
+
+		intensityTexture1[i * 3 + 0] = value;
+		intensityTexture1[i * 3 + 1] = value;
+		intensityTexture1[i * 3 + 2] = value;
+	}
+
+
+
+	int sticky;
+	intensityData0.blendingTexture = intensityTexture0;
+	intensityData1.blendingTexture = intensityTexture1;
 
 	// This call does the intensity map
 
-	error = NvAPI_GPU_SetScanoutIntensity(Topo.displays[0].displayId, &intensityData0, &sticky);
+	error = NvAPI_GPU_SetScanoutIntensity(topo.displays[0].displayId, &intensityData0, &sticky);
 
 	if (error != NVAPI_OK)
 	{
-
 		return	error;
-
 	}
 
-
-	error = NvAPI_GPU_SetScanoutIntensity(Topo.displays[1].displayId, &intensityData1, &sticky);
+	error = NvAPI_GPU_SetScanoutIntensity(topo.displays[1].displayId, &intensityData1, &sticky);
 
 	if (error != NVAPI_OK)
 	{
-
 		return	error;
-
 	}
 
-	// result would be nvapi ok
+
 	return error;
-	*/
+
 }
 
 //

@@ -12,6 +12,7 @@ using namespace std;
 typedef unsigned long NvU32;
 typedef unsigned char NvU8;
 typedef signed int NvS32;
+
 struct NvDisplay {
 	NvU32 displayId;
 	NvS32 overlapx;
@@ -40,10 +41,6 @@ void WriteStreamNvU32(char* charArray, int &point, NvU32 value);
 NvS32 ReadStreamNvS32(char* charArray, int &point);
 void WriteStreamNvS32(char* charArray, int &point, NvS32 value);
 NvTopo DeserialiseTopo(char* input);
-
-
-
-
 
 const int CHARSIZE = 256;
 
@@ -140,7 +137,7 @@ int main()
 		// ID, overlapx, overlap y
 
 		WriteStreamNvU32(input, sp, DisplayIds[3]);
-		WriteStreamNvU32(input, sp, 120);
+		WriteStreamNvU32(input, sp, 240);
 		WriteStreamNvU32(input, sp, 0);
 
 		// Apply grid?
