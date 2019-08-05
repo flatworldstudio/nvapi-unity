@@ -3,7 +3,7 @@
 #include "pch.h"
 #include "NVWrapper.h"
 //#include <stdlib.h>
-//#include <math.h> 
+#include <math.h> 
 #include <windows.h>
 #//include <assert.h>
 #include "include\nvapi.h"
@@ -22,6 +22,8 @@ void WriteStreamNvU32(char* charArray, int &point, NvU32 value);
 NvS32 ReadStreamNvS32(char* charArray, int &point);
 
 void WriteStreamNvS32(char* charArray, int &point, NvS32 value);
+
+NvAPI_Status SetBlend(NV_MOSAIC_GRID_TOPO topo);
 
 static void InitConfigMap() {
 
@@ -50,19 +52,6 @@ int NVInit(char* outStr) {
 int GetGrids(char* outStr) {
 
 	// Init nvapi before calling
-	// Return grid config
-
-	// gridCount
-
-	// GRIDS 
-	// displayCount
-	// rowCount
-	// columnCount
-
-	// DISPLAYS 
-	// ID 4 bytes NvU32
-	// overlapx 4 bytes NvS32
-	// overlapy 4 bytes NvS32
 
 	NvAPI_Status error;
 	NvAPI_ShortString message = "";
@@ -98,51 +87,23 @@ int GetGrids(char* outStr) {
 		WriteStreamNvU8(outStr, sp, numRows);
 
 
-
 		NV_MOSAIC_DISPLAY_SETTING& ds = gridTopo[iGrid].displaySettings;
 
 		WriteStreamNvU32(outStr, sp, ds.width);
-		/*	WriteStreamNvU32(outStr, sp, 1920);
-			WriteStreamNvU32(outStr, sp, 125);
-			WriteStreamNvU32(outStr, sp, 70);*/
 		WriteStreamNvU32(outStr, sp, ds.height);
 		WriteStreamNvU32(outStr, sp, ds.freq);
 
-		//ds.width; ds.height; ds.freq; //Width, Heiht and Refresh Rate for all displays
-		//printf("Width %d\n", ds.width);
-		//printf("Height %d\n", ds.height);
-		//printf("Frequency %d\n", ds.freq);
-
-
 		for (NvU32 iDisplay = 0; iDisplay < gridTopo[iGrid].displayCount; iDisplay++) {
-
-			//	int displayIndex = headerSize + iGrid * gridSize + 4 + iDisplay * displaySize;
 
 			NV_MOSAIC_GRID_TOPO_DISPLAY& display = gridTopo[iGrid].displays[iDisplay];
 
-			//	NvU32 displayId = display.displayId;//unique identifier for this display, that  will be used for all subsequent functions
-
 			WriteStreamNvU32(outStr, sp, display.displayId);
-			//	WriteStreamNvU32(outStr, sp, 15);
 			WriteStreamNvU32(outStr, sp, display.overlapX);
 			WriteStreamNvU32(outStr, sp, display.overlapY);
 
-			/*WriteStreamNvU32(outStr, sp, 1024);
-			WriteStreamNvU32(outStr, sp, -1024);*/
-
-			//display.overlapX; //horizontal overlap for this display, explained later
-			//display.overlapY; //vertical overlap for this display, explained later
-
-
-
-
 		}
 
-
-
 	}
-
-	//for (int i = 0; i < 64; ++i) outStr[i] = message[i];
 
 	return 1;
 }
@@ -252,14 +213,37 @@ int SetGrids(char* inStr, char* outStr) {
 		gridTopo[g] = Topo;
 	}
 
-	error = NvAPI_Mosaic_SetDisplayGrids(gridTopo, gridCount, NV_MOSAIC_SETDISPLAYTOPO_FLAG_CURRENT_GPU_TOPOLOGY);
+	NvU8 applyGrid = ReadStreamNvU8(inStr, sp);
 
-	if ((error != NVAPI_OK))
+	if (applyGrid > 0)
 	{
-		NvAPI_GetErrorMessage(error, message);
-		for (int i = 0; i < 64; ++i) outStr[i] = message[i];
-		return 0;
+		error = NvAPI_Mosaic_SetDisplayGrids(gridTopo, gridCount, NV_MOSAIC_SETDISPLAYTOPO_FLAG_CURRENT_GPU_TOPOLOGY);
+
+		if ((error != NVAPI_OK))
+		{
+			NvAPI_GetErrorMessage(error, message);
+			for (int i = 0; i < 64; ++i) outStr[i] = message[i];
+			return 0;
+		}
 	}
+
+	NvU8 applyBlend = ReadStreamNvU8(inStr, sp);
+
+	if (applyBlend > 0)
+	{
+		// Implied from grid topo. Any overlap will be blended.
+
+		error = SetBlend(gridTopo[0]);
+
+		if ((error != NVAPI_OK))
+		{
+			NvAPI_GetErrorMessage(error, message);
+			for (int i = 0; i < 64; ++i) outStr[i] = message[i];
+			return 0;
+		}
+
+	}
+
 
 	return 1;
 
@@ -268,16 +252,14 @@ int SetGrids(char* inStr, char* outStr) {
 int GetDisplays(char* outStr) {
 
 	// Init nvapi before calling.
-
-	// This populates a char outChar with each bit a connected display. (powered or not)
-	// Result or error message is in outStr;
-
-
+	// Returns a serialised overview of connected displays, their id's and if they have an active intensity mod
 
 	NvAPI_Status error;
 	NvAPI_ShortString message = "";
 
-	NvU8 config;
+	NvU8 connected;
+	NvU8 active;
+	NvU8 intensity;
 
 	// Get GPUs
 	NvPhysicalGpuHandle nvGPUHandles[NVAPI_MAX_PHYSICAL_GPUS];
@@ -300,7 +282,9 @@ int GetDisplays(char* outStr) {
 	DisplayIdList = new NvU32[DisplaysPerGpu*gpuCount];
 	//	DisplayConnected = new NvU32[DisplaysPerGpu*gpuCount];
 
-	config = 0;
+	connected = 0;
+	active = 0;
+	intensity = 0;
 
 	for (gpu = 0; gpu < gpuCount; gpu++)
 	{
@@ -314,67 +298,100 @@ int GetDisplays(char* outStr) {
 			return 0;
 		}
 
-		if (dispIdCount > 0)
+
+		// Create an array to hold refs and get refs
+
+		NV_GPU_DISPLAYIDS* dispIds = NULL;
+		dispIds = new NV_GPU_DISPLAYIDS[dispIdCount];
+		dispIds->version = NV_GPU_DISPLAYIDS_VER;
+
+		NV_SCANOUT_INTENSITY_STATE_DATA intensityState = {};
+		intensityState.version = NV_SCANOUT_INTENSITY_STATE_VER;
+
+		error = NvAPI_GPU_GetConnectedDisplayIds(nvGPUHandles[gpu], dispIds, &dispIdCount, 0);
+
+		if (error != NVAPI_OK)
 		{
-			// Create an array to hold refs and get refs
+			delete[] dispIds;// 
+			NvAPI_GetErrorMessage(error, message);
+			for (int i = 0; i < 64; ++i) outStr[i] = message[i];
+			return 0;
+		}
 
-			NV_GPU_DISPLAYIDS* dispIds = NULL;
-			dispIds = new NV_GPU_DISPLAYIDS[dispIdCount];
-			dispIds->version = NV_GPU_DISPLAYIDS_VER;
+		// Go over displays.
 
-			error = NvAPI_GPU_GetConnectedDisplayIds(nvGPUHandles[gpu], dispIds, &dispIdCount, 0);
+		for (int dispIndex = 0; dispIndex < DisplaysPerGpu; dispIndex++)
+		{
+			int i = gpu * DisplaysPerGpu + dispIndex;
 
-			if (error != NVAPI_OK)
+			if (i > 7)
 			{
-				delete[] dispIds;// 
-				NvAPI_GetErrorMessage(error, message);
-				for (int i = 0; i < 64; ++i) outStr[i] = message[i];
+				NvAPI_ShortString outofrange = "Display index out of range.";
+				for (int i = 0; i < 64; ++i) outStr[i] = outofrange[i];
 				return 0;
 			}
 
-			// Go over displays.
+			if ((dispIndex < dispIdCount))
+				// It appears displays need to be connected bottom gpu ports first. So no skipping of ports.
 
-			for (int dispIndex = 0; dispIndex < DisplaysPerGpu; dispIndex++)
 			{
-				int i = gpu * DisplaysPerGpu + dispIndex;
+				DisplayIdList[i] = dispIds[dispIndex].displayId;
+				connected |= 1 << i;
 
-				if (i > 7) {
+				if (dispIds[dispIndex].isActive) {
 
+					active |= 1 << i;
+
+					error = NvAPI_GPU_GetScanoutIntensityState(dispIds[dispIndex].displayId, &intensityState);
+
+					if (error != NVAPI_OK)
+					{
+						NvAPI_GetErrorMessage(error, message);
+						for (int i = 0; i < 64; ++i) outStr[i] = message[i];
+						return 0;
+					}
+
+					if (intensityState.bEnabled) intensity |= 1 << i;
+
+				}
+
+
+				/*
+				//	error = NvAPI_GPU_GetScanoutIntensityState(dispIds[dispIndex].displayId, &intensityState);
+
+				//	error = NvAPI_GPU_GetScanoutIntensityState(displayId, &intensityState);
+
+
+				error = NvAPI_GPU_GetScanoutIntensityState(2147881093, &intensityState);
+				//	error = NVAPI_OK;
+
+				if (error != NVAPI_OK)
+				{
+					NvAPI_GetErrorMessage(error, message);
 					for (int i = 0; i < 64; ++i) outStr[i] = message[i];
 					return 0;
 				}
 
-				DisplayIdList[i] = dispIds[dispIndex].displayId;
-
-				if ((dispIndex < dispIdCount))
-
-					//	if (DisplayIdList[i] != 0)
-				{
-
-					//			DisplayConnected[i] = 1;
-					config |= 1 << i;
-
-				}
-				else
-				{
-					//		DisplayConnected[i] = 0;
-				}
+				if (intensityState.bEnabled) intensityActive |= 1 << i;
+				*/
+			}
+			else
+			{
+				DisplayIdList[i] = 0;
 			}
 		}
-
 	}
 
 	int sp = 0;
-	WriteStreamNvU8(outStr, sp, config);
+	WriteStreamNvU8(outStr, sp, connected);
+	WriteStreamNvU8(outStr, sp, active);
+	WriteStreamNvU8(outStr, sp, intensity);
+
 	for (int d = 0;d < DisplaysPerGpu*gpuCount;d++) {
 
 		WriteStreamNvU32(outStr, sp, DisplayIdList[d]);
 
 	}
-
-	//outStr[8] = config;
-	//	for (int i = 0; i < 64; ++i) outStr[i] = message[i];
-
 
 	return 1;
 }
@@ -446,6 +463,194 @@ void WriteStreamNvS32(char* charArray, int &point, NvS32 value) {
 
 }
 
+
+NvAPI_Status SetBlend(NV_MOSAIC_GRID_TOPO topo) {
+
+	//	NV_MOSAIC_GRID_TOPO& Topo = TopoP;
+
+	NvAPI_Status error = NVAPI_OK;
+	NvAPI_ShortString estring;
+
+	NV_SCANOUT_INTENSITY_DATA intensityData0, intensityData1;
+
+	// Find overlap.
+
+	if (topo.displayCount == 2 && topo.columns == 2) {
+		// horizontal
+		NvS32 overlapx = (float)topo.displays[1].overlapX;
+		NvU32 width = topo.displaySettings.width;
+
+		const int Steps = 256;
+		//float BlendGamma = 0.5f;
+		float BlendGamma = 0.454f;
+		float intensityTexture0[Steps * 3];
+		float intensityTexture1[Steps * 3];
+
+		float treshold0 = (float)(width - overlapx);
+		float treshold1 = (float)(overlapx);
+
+		float value;
+		float step = width / (float)Steps;
+
+		float offsetTexture[4] = { 0.0f, 0.0f, 0.0f,0.0f };
+
+		for (int i = 0; i < Steps; i++) {
+
+			float x = i * step;
+
+			value = x < treshold0 ? 1.0f : pow(1 - ((x - treshold0) / overlapx), BlendGamma);
+
+		//	value = pow(1 - ((x - treshold0) / overlapx), BlendGamma);
+
+			intensityTexture0[i * 3 + 0] = value;
+			intensityTexture0[i * 3 + 1] = value;
+			intensityTexture0[i * 3 + 2] = value;
+
+			value = x > treshold1 ? 1.0f : pow( x / overlapx,BlendGamma);
+
+			intensityTexture1[i * 3 + 0] = value;
+			intensityTexture1[i * 3 + 1] = value;
+			intensityTexture1[i * 3 + 2] = value;
+		}
+
+		intensityData0.version = NV_SCANOUT_INTENSITY_DATA_VER;
+		intensityData0.width = Steps;
+		intensityData0.height = 1;
+		intensityData0.blendingTexture = intensityTexture0;
+		//	intensityData0.blendingTexture = NULL;
+		intensityData0.offsetTexture = NULL;
+		intensityData0.offsetTexChannels = 1;
+
+		intensityData1.version = NV_SCANOUT_INTENSITY_DATA_VER;
+		intensityData1.width = Steps;
+		intensityData1.height = 1;
+		intensityData1.blendingTexture = intensityTexture1;
+		//	intensityData1.blendingTexture = NULL;
+		intensityData1.offsetTexture = NULL;
+		intensityData1.offsetTexChannels = 1;
+
+		int sticky;
+
+		// This call does the intensity map
+
+		error = NvAPI_GPU_SetScanoutIntensity(topo.displays[0].displayId, &intensityData0, &sticky);
+
+		if (error != NVAPI_OK)
+		{
+			return	error;
+		}
+
+		error = NvAPI_GPU_SetScanoutIntensity(topo.displays[1].displayId, &intensityData1, &sticky);
+
+		if (error != NVAPI_OK)
+		{
+			return	error;
+		}
+
+	}
+
+
+
+	return error;
+	/*
+
+
+	const int Steps = 256;
+	float BlendGamma = 0.5f;
+
+	float intensityTexture0[Steps * 3];
+	float intensityTexture1[Steps * 3];
+
+	//	int width = Steps*BlendFactor;
+
+	int treshold0 = Steps - BlendSteps;
+	int treshold1 = BlendSteps;
+
+	float value;
+
+	for (int i = 0; i < Steps; i++) {
+
+		if (i < treshold0) {
+			value = 1.0f;
+
+			intensityTexture0[i * 3 + 0] = value;
+			intensityTexture0[i * 3 + 1] = value;
+			intensityTexture0[i * 3 + 2] = value;
+		}
+		else {
+
+			//	value = 1.0f - (pow((i - treshold)*(1.0f / width), 2.0f));
+			value = (pow(1 - ((i - treshold0)*(1.0f / BlendSteps)), BlendGamma));
+
+			intensityTexture0[i * 3 + 0] = value;
+			intensityTexture0[i * 3 + 1] = value;
+			intensityTexture0[i * 3 + 2] = value;
+		}
+
+		if (i > treshold1) {
+			value = 1.0f;
+
+			intensityTexture1[i * 3 + 0] = value;
+			intensityTexture1[i * 3 + 1] = value;
+			intensityTexture1[i * 3 + 2] = value;
+		}
+		else {
+
+			//	value = 1.0f - (pow((i - treshold)*(1.0f / width), 2.0f));
+			value = (pow((i)*(1.0f / BlendSteps), BlendGamma));
+
+			intensityTexture1[i * 3 + 0] = value;
+			intensityTexture1[i * 3 + 1] = value;
+			intensityTexture1[i * 3 + 2] = value;
+		}
+
+
+	}
+
+	float offsetTexture[4] = { 0.0f, 0.0f, 0.0f,0.0f };
+
+	intensityData0.version = NV_SCANOUT_INTENSITY_DATA_VER;
+	intensityData0.width = Steps;
+	intensityData0.height = 1;
+	intensityData0.blendingTexture = intensityTexture0;
+	intensityData0.offsetTexture = NULL;
+	intensityData0.offsetTexChannels = 1;
+
+	intensityData1.version = NV_SCANOUT_INTENSITY_DATA_VER;
+	intensityData1.width = Steps;
+	intensityData1.height = 1;
+	intensityData1.blendingTexture = intensityTexture1;
+	intensityData1.offsetTexture = NULL;
+	intensityData1.offsetTexChannels = 1;
+
+
+	int sticky = 0;
+
+	// This call does the intensity map
+
+	error = NvAPI_GPU_SetScanoutIntensity(Topo.displays[0].displayId, &intensityData0, &sticky);
+
+	if (error != NVAPI_OK)
+	{
+
+		return	error;
+
+	}
+
+
+	error = NvAPI_GPU_SetScanoutIntensity(Topo.displays[1].displayId, &intensityData1, &sticky);
+
+	if (error != NVAPI_OK)
+	{
+
+		return	error;
+
+	}
+
+	// result would be nvapi ok
+	return error;
+	*/
+}
 
 //
 
@@ -558,6 +763,7 @@ extern "C" {
 		return 1;
 
 	}
+
 
 
 

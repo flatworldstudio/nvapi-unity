@@ -4,12 +4,34 @@
 #include "pch.h"
 #include <iostream>
 #include "NVWrapper.h"
+#include <bitset>
+
 using namespace std;
 
 
 typedef unsigned long NvU32;
 typedef unsigned char NvU8;
 typedef signed int NvS32;
+struct NvDisplay {
+	NvU32 displayId;
+	NvS32 overlapx;
+	NvS32 overlapy;
+
+};
+struct NvGrid {
+	NvU8 displayCount;
+	NvU8 columns;
+	NvU8 rows;
+	NvU32 width;
+	NvU32 height;
+	NvU32 freq;
+	NvDisplay* displays;
+
+};
+struct NvTopo {
+	NvGrid* grids;
+	NvU32 gridCount;
+};
 
 NvU8 ReadStreamNvU8(char* charArray, int &point);
 void WriteStreamNvU8(char* charArray, int &point, NvU8 theChar);
@@ -17,6 +39,187 @@ NvU32 ReadStreamNvU32(char* charArray, int &point);
 void WriteStreamNvU32(char* charArray, int &point, NvU32 value);
 NvS32 ReadStreamNvS32(char* charArray, int &point);
 void WriteStreamNvS32(char* charArray, int &point, NvS32 value);
+NvTopo DeserialiseTopo(char* input);
+
+
+
+
+
+const int CHARSIZE = 256;
+
+int main()
+{
+	std::cout << "Testing NVAPI wrapper\n\n";
+
+	char output[CHARSIZE];
+	int result;
+
+	result = GetConnectedDisplays(output);
+
+	if (result == 0) {
+		cout << "Connected Displays Failed\n";
+		cout << output;
+		return 0;
+	}
+
+	int sp = 0;
+	char connected = ReadStreamNvU8(output, sp);
+	char active = ReadStreamNvU8(output, sp);
+	char intensity = ReadStreamNvU8(output, sp);
+
+
+	std::cout << "connected: " << std::bitset<8>(connected) << '\n';
+	std::cout << "active: " << std::bitset<8>(active) << '\n';
+	std::cout << "intensity: " << std::bitset<8>(intensity) << '\n';
+
+	NvU32* DisplayIds = new NvU32[8];
+
+	for (int d = 0;d < 8;d++)
+	{
+		DisplayIds[d] = ReadStreamNvU32(output, sp);
+		cout << "Display ID " << d << ": " << (unsigned int)DisplayIds[d] << "\n";
+	}
+
+	//	int sp;
+		//int r2;
+	NvU8 gridCount;
+	NvTopo theTopo = {};
+	NvU8 SetGrid;
+	NvU8 SetBlend;
+
+	switch (connected) {
+
+	case 0b00001111:
+
+		cout << "Dual desktop plus wall\n";
+
+		result = GetGridSetup(output);
+
+		if (result == 0) {
+			cout << "Get grid setup failed\n";
+			cout << output;
+			return 0;
+		}
+
+		theTopo = DeserialiseTopo(output);
+		SetGrid = 1;
+		SetBlend = 1;
+
+		if (theTopo.gridCount == 1 && theTopo.grids[0].columns == 2) {
+			cout << "Topology is already set correctly. \n";
+			SetGrid = 0;
+		}
+
+		char input[CHARSIZE];
+		sp = 0;
+		// Gridcount
+		WriteStreamNvU8(input, sp, 1);
+
+		// Grids
+
+		// Displays, columns, rows
+
+		WriteStreamNvU8(input, sp, 2);
+		WriteStreamNvU8(input, sp, 2);
+		WriteStreamNvU8(input, sp, 1);
+
+		// Width, height, freq
+
+		WriteStreamNvU32(input, sp, 1920);
+		WriteStreamNvU32(input, sp, 1080);
+		WriteStreamNvU32(input, sp, 60);
+
+		// Displays
+
+		// ID, overlapx, overlap y
+
+		WriteStreamNvU32(input, sp, DisplayIds[2]);
+		WriteStreamNvU32(input, sp, 0);
+		WriteStreamNvU32(input, sp, 0);
+
+		// ID, overlapx, overlap y
+
+		WriteStreamNvU32(input, sp, DisplayIds[3]);
+		WriteStreamNvU32(input, sp, 120);
+		WriteStreamNvU32(input, sp, 0);
+
+		// Apply grid?
+
+		WriteStreamNvU8(input, sp, SetGrid);
+
+		// Apply blend?
+
+		WriteStreamNvU8(input, sp, SetBlend);
+
+		//result = 0;
+
+		result = SetGridSetup(input, output);
+
+		if (result == 0) {
+			cout << "Failed\n";
+			cout << output;
+			return 0;
+		}
+
+		cout << "Success\n";
+		cout << "\n";
+
+		break;
+
+
+	default:
+		break;
+	}
+
+
+}
+
+
+NvTopo DeserialiseTopo(char* input) {
+
+	int sp = 0;
+
+	NvTopo theTopo = NvTopo{};
+	theTopo.gridCount = ReadStreamNvU8(input, sp);
+	theTopo.grids = new NvGrid[theTopo.gridCount];
+
+	cout << "Gridcount " << (unsigned int)theTopo.gridCount << "\n";
+
+	for (int g = 0;g < theTopo.gridCount;g++) {
+
+		//	theTopo.grids[g] = NvGrid{};
+
+		theTopo.grids[g].displayCount = ReadStreamNvU8(input, sp);
+		theTopo.grids[g].columns = ReadStreamNvU8(input, sp);
+		theTopo.grids[g].rows = ReadStreamNvU8(input, sp);
+
+		cout << "displayCount " << (unsigned int)theTopo.grids[g].displayCount << "\n";
+		cout << "columns " << (unsigned int)theTopo.grids[g].columns << "\n";
+		cout << "rows " << (unsigned int)theTopo.grids[g].rows << "\n";
+
+		theTopo.grids[g].width = ReadStreamNvU32(input, sp);
+		theTopo.grids[g].height = ReadStreamNvU32(input, sp);
+		theTopo.grids[g].freq = ReadStreamNvU32(input, sp);
+		cout << "width " << (unsigned int)theTopo.grids[g].width << "\n";
+		cout << "height " << (unsigned int)theTopo.grids[g].height << "\n";
+		cout << "freq " << (unsigned int)theTopo.grids[g].freq << "\n";
+
+		theTopo.grids[g].displays = new NvDisplay[theTopo.grids[g].displayCount];
+
+		for (int d = 0;d < theTopo.grids[g].displayCount;d++) {
+
+			theTopo.grids[g].displays[d].displayId = ReadStreamNvU32(input, sp);
+			theTopo.grids[g].displays[d].overlapx = ReadStreamNvU32(input, sp);
+			theTopo.grids[g].displays[d].overlapy = ReadStreamNvU32(input, sp);
+			cout << "Display ID " << (unsigned int)theTopo.grids[g].displays[d].displayId << "\n";
+			cout << "overlap x " << (signed int)theTopo.grids[g].displays[d].overlapx << "\n";
+			cout << "overlap y " << (signed int)theTopo.grids[g].displays[d].overlapy << "\n";
+
+		}
+
+	}
+	return theTopo;
+}
 
 
 NvU8 ReadStreamNvU8(char* charArray, int &point) {
@@ -79,163 +282,6 @@ void WriteStreamNvS32(char* charArray, int &point, NvS32 value) {
 	point += 4;
 
 }
-
-
-
-int main()
-{
-	std::cout << "Testing NVAPI wrapper\n";
-
-	char feedback[256];
-	char input[256];
-	int r, r2;
-
-	r = GetConnectedDisplays(feedback);
-	int sp = 0;
-	char config = ReadStreamNvU8(feedback, sp);
-
-
-	cout << "Display ID " << (unsigned int)ReadStreamNvU32(feedback, sp) << "\n";
-	cout << "Display ID " << (unsigned int)ReadStreamNvU32(feedback, sp) << "\n";
-	cout << "Display ID " << (unsigned int)ReadStreamNvU32(feedback, sp) << "\n";
-	cout << "Display ID " << (unsigned int)ReadStreamNvU32(feedback, sp) << "\n";
-	cout << "Display ID " << (unsigned int)ReadStreamNvU32(feedback, sp) << "\n";
-	cout << "Display ID " << (unsigned int)ReadStreamNvU32(feedback, sp) << "\n";
-	cout << "Display ID " << (unsigned int)ReadStreamNvU32(feedback, sp) << "\n";
-	cout << "Display ID " << (unsigned int)ReadStreamNvU32(feedback, sp) << "\n";
-
-
-	//std::string  FeedbackString = feedback;
-
-	if (r == 0) {
-		cout << "Failed\n";
-		cout << feedback;
-		cout << "\n";
-	}
-	else {
-		cout << "Success\n";
-		//	cout << feedback;
-		cout << "\n";
-
-		int sp;
-		NvU8 gridCount;
-
-		switch (config) {
-		case 0b00001100:
-			cout << "Dual desktop only\n";
-
-			break;
-		case 0b00001111:
-
-			cout << "Dual desktop plus wall\n";
-
-			r = GetGridSetup(feedback);
-			sp = 0;
-			gridCount = ReadStreamNvU8(feedback, sp);
-
-			cout << "Gridcount " << (unsigned int)gridCount << "\n";
-
-			for (int g = 0;g < gridCount;g++) {
-				NvU8 displayCount = ReadStreamNvU8(feedback, sp);
-				NvU8 columns = ReadStreamNvU8(feedback, sp);
-				NvU8 rows = ReadStreamNvU8(feedback, sp);
-				cout << "displayCount " << (unsigned int)displayCount << "\n";
-				cout << "columns " << (unsigned int)columns << "\n";
-				cout << "rows " << (unsigned int)rows << "\n";
-
-				NvU32 width = ReadStreamNvU32(feedback, sp);
-				//	width = 1920;
-				NvU32 height = ReadStreamNvU32(feedback, sp);
-				NvU32 freq = ReadStreamNvU32(feedback, sp);
-				cout << "width " << (unsigned int)width << "\n";
-				cout << "height " << (unsigned int)height << "\n";
-				cout << "freq " << (unsigned int)freq << "\n";
-
-				for (int d = 0;d < displayCount;d++) {
-					NvU32 displayId = ReadStreamNvU32(feedback, sp);
-					NvS32 overlapx = ReadStreamNvU32(feedback, sp);
-					NvS32 overlapy = ReadStreamNvU32(feedback, sp);
-					cout << "Display ID " << (unsigned int)displayId << "\n";
-					cout << "overlap x " << (signed int)overlapx << "\n";
-					cout << "overlap y " << (signed int)overlapy << "\n";
-
-				}
-
-			}
-
-
-
-			sp = 0;
-			// Gridcount
-			WriteStreamNvU8(input, sp, 1);
-
-			// Grids
-
-			// Displays, columns, rows
-
-			WriteStreamNvU8(input, sp, 2);
-			WriteStreamNvU8(input, sp, 2);
-			WriteStreamNvU8(input, sp, 1);
-
-			// Width, height, freq
-
-			WriteStreamNvU32(input, sp, 1920);
-			WriteStreamNvU32(input, sp, 1080);
-			WriteStreamNvU32(input, sp, 60);
-
-			// Displays
-
-			// ID, overlapx, overlap y
-
-			WriteStreamNvU32(input, sp, 2147881093);
-			WriteStreamNvU32(input, sp, 0);
-			WriteStreamNvU32(input, sp, 0);
-
-			// ID, overlapx, overlap y
-
-			WriteStreamNvU32(input, sp, 2147881092);
-			WriteStreamNvU32(input, sp, 100);
-			WriteStreamNvU32(input, sp, 0);
-
-
-			//sp = 0;
-			r2=0;
-		//	r2 = SetGridSetup(input, feedback);
-
-			if (r2 == 0) {
-				cout << "Failed\n";
-				cout << feedback;
-				cout << "\n";
-			}
-			else {
-				cout << "Success\n";
-				cout << feedback;
-				cout << "\n";
-			}
-
-			//	cout << "Set Grid " << feedback << "\n";
-
-			/*	cout << "Read  " << (unsigned int)ReadStreamNvU8(feedback,sp) << "\n";
-				cout << "Read  " << (unsigned int)ReadStreamNvU8(feedback, sp) << "\n";*/
-				/*		cout << "Read  " << (signed int)ReadStreamNvU32(feedback, sp) << "\n";
-						cout << "Read  " << (signed int)ReadStreamNvU32(feedback, sp) << "\n";*/
-
-			break;
-
-
-		default:
-			break;
-		}
-
-
-	}
-
-
-
-}
-
-
-
 
 
 // Run program: Ctrl + F5 or Debug > Start Without Debugging menu
