@@ -34,8 +34,31 @@ struct NvGrid {
 struct NvTopo {
 	NvGrid* grids;
 	NvU32 gridCount;
-	bool ApplyGrid;
-	bool ApplyBlend;
+	NvU8 ApplyGrid;
+	NvU8 ApplyBlend;
+
+	bool Matches(NvTopo match)
+	{
+		if (gridCount != match.gridCount) return false;
+
+		for (int g = 0;g < gridCount;g++) {
+			if (grids[g].displayCount != match.grids[g].displayCount) return false;
+			if (grids[g].columns != match.grids[g].columns) return false;
+			if (grids[g].rows != match.grids[g].rows) return false;
+			if (grids[g].width != match.grids[g].width) return false;
+			if (grids[g].height != match.grids[g].height) return false;
+			if (grids[g].freq != match.grids[g].freq) return false;
+			for (int d = 0;d < grids[g].displayCount;d++) {
+				if (grids[g].displays[d].displayId != match.grids[g].displays[d].displayId) return false;
+				if (grids[g].displays[d].overlapx != match.grids[g].displays[d].overlapx) return false;
+				if (grids[g].displays[d].overlapy != match.grids[g].displays[d].overlapy) return false;
+			}
+		}
+
+
+
+
+	}
 
 };
 
@@ -104,15 +127,9 @@ int main()
 		}
 
 		theTopo = DeserialiseTopo(output);
-		SetGrid = 1;
-		SetBlend = 1;
 
-		if (theTopo.gridCount == 1 && theTopo.grids[0].columns == 2) {
-			cout << "Topology is already set correctly. \n";
-			SetGrid = 0;
-		}
 
-		// If not.
+
 
 		NvTopo newTopo = NvTopo{};
 		newTopo.gridCount = 1;
@@ -131,18 +148,60 @@ int main()
 		newTopo.grids[0].displays[0].overlapx = 0;
 		newTopo.grids[0].displays[0].overlapy = 0;
 
-		newTopo.grids[0].displays[1].displayId = DisplayIds[2];
-		newTopo.grids[0].displays[1].overlapx = 0;
+		newTopo.grids[0].displays[1].displayId = DisplayIds[3];
+		newTopo.grids[0].displays[1].overlapx = 240;
 		newTopo.grids[0].displays[1].overlapy = 0;
 
-		newTopo.ApplyGrid = SetGrid;
+		newTopo.ApplyGrid = 1;
+
+		if (theTopo.Matches(newTopo))
+		{
+			cout << "MATCH\n";
+			newTopo.ApplyGrid = 0;
+		}
+
 		newTopo.ApplyBlend = 1;
+
+		/*
+				NvTopo dualTopo = NvTopo{};
+				dualTopo.gridCount = 2;
+
+				dualTopo.grids = new NvGrid[dualTopo.gridCount];
+
+				dualTopo.grids[0].displayCount = 1;
+				dualTopo.grids[0].columns = 1;
+				dualTopo.grids[0].rows = 1;
+				dualTopo.grids[0].width = 1920;
+				dualTopo.grids[0].height = 1080;
+				dualTopo.grids[0].freq = 60;
+
+				dualTopo.grids[0].displays = new NvDisplay[dualTopo.grids[0].displayCount];
+
+				dualTopo.grids[0].displays[0].displayId = DisplayIds[2];
+				dualTopo.grids[0].displays[0].overlapx = 0;
+				dualTopo.grids[0].displays[0].overlapy = 0;
+
+				dualTopo.grids[1].displayCount = 1;
+				dualTopo.grids[1].columns = 1;
+				dualTopo.grids[1].rows = 1;
+				dualTopo.grids[1].width = 1920;
+				dualTopo.grids[1].height = 1080;
+				dualTopo.grids[1].freq = 60;
+
+				dualTopo.grids[1].displays = new NvDisplay[dualTopo.grids[0].displayCount];
+
+				dualTopo.grids[1].displays[0].displayId = DisplayIds[3];
+				dualTopo.grids[1].displays[0].overlapx = 0;
+				dualTopo.grids[1].displays[0].overlapy = 0;
+
+				dualTopo.ApplyGrid = 1;
+				dualTopo.ApplyBlend = 0;*/
 
 
 		char input[CHARSIZE];
 
 		SerialiseTopo(newTopo, input);
-		
+
 		result = SetGridSetup(input, output);
 
 		if (result == 0) {
@@ -250,8 +309,8 @@ void SerialiseTopo(NvTopo theTopo, char* input) {
 			// ID, overlapx, overlap y
 
 			WriteStreamNvU32(input, sp, theDisplay.displayId);
-			WriteStreamNvU32(input, sp, 0);
-			WriteStreamNvU32(input, sp, 0);
+			WriteStreamNvU32(input, sp, theDisplay.overlapx);
+			WriteStreamNvU32(input, sp, theDisplay.overlapy);
 
 		}
 

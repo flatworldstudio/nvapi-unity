@@ -25,9 +25,10 @@ void WriteStreamNvS32(char* charArray, int &point, NvS32 value);
 
 NvAPI_Status SetBlend(NV_MOSAIC_GRID_TOPO topo);
 
-static void InitConfigMap() {
+NvAPI_ShortString OUT_OF_RANGE = "Display index out of range.";
+NvAPI_ShortString DISPLAY_ID_DUPLICATE = "Display ID used more than once.";
+NvAPI_ShortString DISPLAY_INVALID_GRID = "Grid invalid.";
 
-}
 
 
 
@@ -114,6 +115,13 @@ int SetGrids(char* inStr, char* outStr) {
 	NvAPI_Status error;
 	NvAPI_ShortString message = "";
 
+	// Create an array of display ids for validation
+
+	NvU32* DisplayIds = new NvU32[8];
+	for (int d = 0;d < 8;d++) DisplayIds[d] = 0;
+
+	NvU8 DisplayIdIndex = 0;
+
 	// Get number of grids
 
 	NvU32 gridCount;
@@ -148,11 +156,15 @@ int SetGrids(char* inStr, char* outStr) {
 	gridTopo = new NV_MOSAIC_GRID_TOPO[gridCount];
 	gridTopo->version = NV_MOSAIC_GRID_TOPO_VER;
 
+	bool GridsValid = true;
+
 	for (int g = 0;g < gridCount;g++) {
 
 		NvU8 displayCount = ReadStreamNvU8(inStr, sp);
 		NvU8 columns = ReadStreamNvU8(inStr, sp);
 		NvU8 rows = ReadStreamNvU8(inStr, sp);
+
+		if (columns*rows != displayCount) GridsValid = false;
 
 		//	WriteStreamNvU8(outStr, op, displayCount);
 
@@ -206,11 +218,43 @@ int SetGrids(char* inStr, char* outStr) {
 			Topo.displays[d].overlapX = overlapx;
 			Topo.displays[d].overlapY = overlapy;
 
+			DisplayIds[DisplayIdIndex] = displayId;
+			DisplayIdIndex++;
+
 		}
 		Topo.displayCount = displayCount;
 		Topo.columns = columns;
 		Topo.rows = rows;
 		gridTopo[g] = Topo;
+	}
+
+	// Validate
+
+	if (!GridsValid) {
+		for (int i = 0; i < 64; ++i) outStr[i] = DISPLAY_INVALID_GRID[i];
+		return 0;
+	}
+
+	// Check ID duplicates (which might crash the driver)
+
+	bool IdsValid = true;
+
+	if (DisplayIdIndex > 1) {
+
+		for (int d = 0;d < DisplayIdIndex - 1;d++) {
+			for (int c = d + 1;c < DisplayIdIndex;c++) {
+				if (DisplayIds[d] == DisplayIds[c]) IdsValid = false;
+			}
+
+		}
+
+	}
+
+	
+
+	if (!IdsValid) {
+		for (int i = 0; i < 64; ++i) outStr[i] = DISPLAY_ID_DUPLICATE[i];
+		return 0;
 	}
 
 	NvU8 applyGrid = ReadStreamNvU8(inStr, sp);
@@ -298,7 +342,6 @@ int GetDisplays(char* outStr) {
 			return 0;
 		}
 
-
 		// Create an array to hold refs and get refs
 
 		NV_GPU_DISPLAYIDS* dispIds = NULL;
@@ -326,8 +369,8 @@ int GetDisplays(char* outStr) {
 
 			if (i > 7)
 			{
-				NvAPI_ShortString outofrange = "Display index out of range.";
-				for (int i = 0; i < 64; ++i) outStr[i] = outofrange[i];
+				//	NvAPI_ShortString outofrange = "Display index out of range.";
+				for (int i = 0; i < 64; ++i) outStr[i] = OUT_OF_RANGE[i];
 				return 0;
 			}
 
