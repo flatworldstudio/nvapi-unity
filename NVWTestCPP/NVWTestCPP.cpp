@@ -8,10 +8,11 @@
 
 using namespace std;
 
-
 typedef unsigned long NvU32;
 typedef unsigned char NvU8;
 typedef signed int NvS32;
+
+// Structs to hold info on a display topology. These can be mirrored on the unity side. Transfer via serialisation.
 
 struct NvDisplay {
 	NvU32 displayId;
@@ -19,6 +20,7 @@ struct NvDisplay {
 	NvS32 overlapy;
 
 };
+
 struct NvGrid {
 	NvU8 displayCount;
 	NvU8 columns;
@@ -32,17 +34,22 @@ struct NvGrid {
 struct NvTopo {
 	NvGrid* grids;
 	NvU32 gridCount;
+	bool ApplyGrid;
+	bool ApplyBlend;
+
 };
 
 NvU8 ReadStreamNvU8(char* charArray, int &point);
 void WriteStreamNvU8(char* charArray, int &point, NvU8 theChar);
 NvU32 ReadStreamNvU32(char* charArray, int &point);
 void WriteStreamNvU32(char* charArray, int &point, NvU32 value);
-NvS32 ReadStreamNvS32(char* charArray, int &point);
-void WriteStreamNvS32(char* charArray, int &point, NvS32 value);
-NvTopo DeserialiseTopo(char* input);
 
-const int CHARSIZE = 256;
+
+NvTopo DeserialiseTopo(char* input);
+void SerialiseTopo(NvTopo topo, char* input);
+
+
+const int CHARSIZE = 256; // Limit for char arrays to transfer (serialised) data.
 
 int main()
 {
@@ -77,8 +84,6 @@ int main()
 		cout << "Display ID " << d << ": " << (unsigned int)DisplayIds[d] << "\n";
 	}
 
-	//	int sp;
-		//int r2;
 	NvU8 gridCount;
 	NvTopo theTopo = {};
 	NvU8 SetGrid;
@@ -107,49 +112,37 @@ int main()
 			SetGrid = 0;
 		}
 
+		// If not.
+
+		NvTopo newTopo = NvTopo{};
+		newTopo.gridCount = 1;
+
+		newTopo.grids = new NvGrid[newTopo.gridCount];
+		newTopo.grids[0].displayCount = 2;
+		newTopo.grids[0].columns = 2;
+		newTopo.grids[0].rows = 1;
+		newTopo.grids[0].width = 1920;
+		newTopo.grids[0].height = 1080;
+		newTopo.grids[0].freq = 60;
+
+		newTopo.grids[0].displays = new NvDisplay[newTopo.grids[0].displayCount];
+
+		newTopo.grids[0].displays[0].displayId = DisplayIds[2];
+		newTopo.grids[0].displays[0].overlapx = 0;
+		newTopo.grids[0].displays[0].overlapy = 0;
+
+		newTopo.grids[0].displays[1].displayId = DisplayIds[2];
+		newTopo.grids[0].displays[1].overlapx = 0;
+		newTopo.grids[0].displays[1].overlapy = 0;
+
+		newTopo.ApplyGrid = SetGrid;
+		newTopo.ApplyBlend = 1;
+
+
 		char input[CHARSIZE];
-		sp = 0;
-		// Gridcount
-		WriteStreamNvU8(input, sp, 1);
 
-		// Grids
-
-		// Displays, columns, rows
-
-		WriteStreamNvU8(input, sp, 2);
-		WriteStreamNvU8(input, sp, 2);
-		WriteStreamNvU8(input, sp, 1);
-
-		// Width, height, freq
-
-		WriteStreamNvU32(input, sp, 1920);
-		WriteStreamNvU32(input, sp, 1080);
-		WriteStreamNvU32(input, sp, 60);
-
-		// Displays
-
-		// ID, overlapx, overlap y
-
-		WriteStreamNvU32(input, sp, DisplayIds[2]);
-		WriteStreamNvU32(input, sp, 0);
-		WriteStreamNvU32(input, sp, 0);
-
-		// ID, overlapx, overlap y
-
-		WriteStreamNvU32(input, sp, DisplayIds[3]);
-		WriteStreamNvU32(input, sp, 240);
-		WriteStreamNvU32(input, sp, 0);
-
-		// Apply grid?
-
-		WriteStreamNvU8(input, sp, SetGrid);
-
-		// Apply blend?
-
-		WriteStreamNvU8(input, sp, SetBlend);
-
-		//result = 0;
-
+		SerialiseTopo(newTopo, input);
+		
 		result = SetGridSetup(input, output);
 
 		if (result == 0) {
@@ -174,17 +167,18 @@ int main()
 
 NvTopo DeserialiseTopo(char* input) {
 
+	// Deserialises char array into a new topology struct. To be mirrored on unity side.
+
 	int sp = 0;
 
 	NvTopo theTopo = NvTopo{};
+
 	theTopo.gridCount = ReadStreamNvU8(input, sp);
 	theTopo.grids = new NvGrid[theTopo.gridCount];
 
 	cout << "Gridcount " << (unsigned int)theTopo.gridCount << "\n";
 
 	for (int g = 0;g < theTopo.gridCount;g++) {
-
-		//	theTopo.grids[g] = NvGrid{};
 
 		theTopo.grids[g].displayCount = ReadStreamNvU8(input, sp);
 		theTopo.grids[g].columns = ReadStreamNvU8(input, sp);
@@ -218,6 +212,61 @@ NvTopo DeserialiseTopo(char* input) {
 	return theTopo;
 }
 
+void SerialiseTopo(NvTopo theTopo, char* input) {
+
+	// Serialises  a topology struct into a char array. To be mirrored on unity side.
+
+	int sp = 0;
+
+	// Serialise gridcount.
+
+	NvU8 Gridcount = theTopo.gridCount;
+	WriteStreamNvU8(input, sp, Gridcount);// dot notation cannot be applied to pointers.
+
+		// Serialise Grids
+
+	for (int g = 0;g < Gridcount;g++) {
+
+		NvGrid theGrid = theTopo.grids[g];
+
+		// Displays, columns, rows
+
+		WriteStreamNvU8(input, sp, theGrid.displayCount);
+		WriteStreamNvU8(input, sp, theGrid.columns);
+		WriteStreamNvU8(input, sp, theGrid.rows);
+
+		// Width, height, freq
+
+		WriteStreamNvU32(input, sp, theGrid.width);
+		WriteStreamNvU32(input, sp, theGrid.height);
+		WriteStreamNvU32(input, sp, theGrid.freq);
+
+		// Serialise displays
+
+		for (int d = 0;d < theGrid.displayCount;d++)
+		{
+			NvDisplay theDisplay = theGrid.displays[d];
+
+			// ID, overlapx, overlap y
+
+			WriteStreamNvU32(input, sp, theDisplay.displayId);
+			WriteStreamNvU32(input, sp, 0);
+			WriteStreamNvU32(input, sp, 0);
+
+		}
+
+	}
+
+	// Apply grid?
+
+	WriteStreamNvU8(input, sp, theTopo.ApplyGrid);
+
+	// Apply blend?
+
+	WriteStreamNvU8(input, sp, theTopo.ApplyBlend);
+
+}
+
 
 NvU8 ReadStreamNvU8(char* charArray, int &point) {
 	point++;
@@ -233,8 +282,7 @@ void WriteStreamNvU8(char* charArray, int &point, NvU8 theChar) {
 
 NvU32 ReadStreamNvU32(char* charArray, int &point) {
 
-
-	//	NvU32 value = charArray[point + 0] + charArray[point + 1] << 8 + charArray[point + 2] << 16 + charArray[point + 3] << 24;
+	// Read 32 bit unsigned
 
 	NvU8 value0 = (NvU8)charArray[point + 0];
 	NvU8 value1 = (NvU8)charArray[point + 1];
@@ -251,25 +299,7 @@ NvU32 ReadStreamNvU32(char* charArray, int &point) {
 
 void WriteStreamNvU32(char* charArray, int &point, NvU32 value) {
 
-	charArray[point + 0] = value & 0x000000ff;
-	charArray[point + 1] = (value & 0x0000ff00) >> 8;
-	charArray[point + 2] = (value & 0x00ff0000) >> 16;
-	charArray[point + 3] = (value & 0xff000000) >> 24;
-
-	point += 4;
-
-}
-
-NvS32 ReadStreamNvS32(char* charArray, int &point) {
-
-	NvS32 value = charArray[point + 0] + charArray[point + 1] << 8 + charArray[point + 2] << 16 + charArray[point + 3] << 24;
-
-	point += 4;
-	return value;
-
-}
-
-void WriteStreamNvS32(char* charArray, int &point, NvS32 value) {
+	// write 32 bit unsigned 
 
 	charArray[point + 0] = value & 0x000000ff;
 	charArray[point + 1] = (value & 0x0000ff00) >> 8;
@@ -279,6 +309,26 @@ void WriteStreamNvS32(char* charArray, int &point, NvS32 value) {
 	point += 4;
 
 }
+
+//NvS32 ReadStreamNvS32(char* charArray, int &point) {
+//
+//	NvS32 value = charArray[point + 0] + charArray[point + 1] << 8 + charArray[point + 2] << 16 + charArray[point + 3] << 24;
+//
+//	point += 4;
+//	return value;
+//
+//}
+//
+//void WriteStreamNvS32(char* charArray, int &point, NvS32 value) {
+//
+//	charArray[point + 0] = value & 0x000000ff;
+//	charArray[point + 1] = (value & 0x0000ff00) >> 8;
+//	charArray[point + 2] = (value & 0x00ff0000) >> 16;
+//	charArray[point + 3] = (value & 0xff000000) >> 24;
+//
+//	point += 4;
+//
+//}
 
 
 // Run program: Ctrl + F5 or Debug > Start Without Debugging menu
