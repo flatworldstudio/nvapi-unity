@@ -1,40 +1,34 @@
 #include <stdio.h>
-
 #include "pch.h"
 #include "NVWrapper.h"
-//#include <stdlib.h>
 #include <math.h> 
 #include <windows.h>
-#//include <assert.h>
 #include "include\nvapi.h"
 
 const int CHARSIZE = 256;
 
-
 NvU8 ReadStreamNvU8(char* charArray, int &point);
-
 void WriteStreamNvU8(char* charArray, int &point, NvU8 theChar);
 
 NvU32 ReadStreamNvU32(char* charArray, int &point);
-
 void WriteStreamNvU32(char* charArray, int &point, NvU32 value);
 
-NvS32 ReadStreamNvS32(char* charArray, int &point);
-
-void WriteStreamNvS32(char* charArray, int &point, NvS32 value);
+//NvS32 ReadStreamNvS32(char* charArray, int &point);
+//void WriteStreamNvS32(char* charArray, int &point, NvS32 value);
 
 NvAPI_Status SetBlend(NV_MOSAIC_GRID_TOPO topo);
 
 NvAPI_ShortString OUT_OF_RANGE = "Display index out of range.";
 NvAPI_ShortString DISPLAY_ID_DUPLICATE = "Display ID used more than once.";
 NvAPI_ShortString DISPLAY_INVALID_GRID = "Grid invalid.";
+NvAPI_ShortString TEST = "TEST TEST TESTTESTTESTTESTTETESTTESTTESTTESTTESTTESTTEST.";
 
-
-
+// Wrapper for NvApi.
 
 int NVInit(char* outStr) {
 
 	// Initialize NVAPI
+
 	NvAPI_Status error;
 	NvAPI_ShortString result = "";
 	error = NvAPI_Initialize();
@@ -49,10 +43,9 @@ int NVInit(char* outStr) {
 	return 1;
 }
 
-
 int GetGrids(char* outStr) {
 
-	// Init nvapi before calling
+	// Init nvapi before calling. Returns serialised info on grid.
 
 	NvAPI_Status error;
 	NvAPI_ShortString message = "";
@@ -94,6 +87,8 @@ int GetGrids(char* outStr) {
 		WriteStreamNvU32(outStr, sp, ds.height);
 		WriteStreamNvU32(outStr, sp, ds.freq);
 
+		WriteStreamNvU8(outStr, sp, 0);// write void for applyblend field.
+
 		for (NvU32 iDisplay = 0; iDisplay < gridTopo[iGrid].displayCount; iDisplay++) {
 
 			NV_MOSAIC_GRID_TOPO_DISPLAY& display = gridTopo[iGrid].displays[iDisplay];
@@ -105,6 +100,8 @@ int GetGrids(char* outStr) {
 		}
 
 	}
+
+	WriteStreamNvU8(outStr, sp,0);// write void for applygrid field. (just for symmetry)
 
 	return 1;
 }
@@ -158,19 +155,26 @@ int SetGrids(char* inStr, char* outStr) {
 
 	bool GridsValid = true;
 
+	// Create pointer and allocate mem to hold applyblend bools per grid
+
+	NvU8* ApplyBlend = new NvU8[gridCount];
+
 	for (int g = 0;g < gridCount;g++) {
 
 		NvU8 displayCount = ReadStreamNvU8(inStr, sp);
+
+		if (displayCount == 0 || displayCount > 8) GridsValid = false;
+
 		NvU8 columns = ReadStreamNvU8(inStr, sp);
 		NvU8 rows = ReadStreamNvU8(inStr, sp);
 
 		if (columns*rows != displayCount) GridsValid = false;
 
-		//	WriteStreamNvU8(outStr, op, displayCount);
-
 		NvU32 width = ReadStreamNvU32(inStr, sp);
 		NvU32 height = ReadStreamNvU32(inStr, sp);
 		NvU32 freq = ReadStreamNvU32(inStr, sp);
+
+		ApplyBlend[g] = ReadStreamNvU8(inStr, sp);
 
 		// Create topo
 
@@ -250,8 +254,6 @@ int SetGrids(char* inStr, char* outStr) {
 
 	}
 
-	
-
 	if (!IdsValid) {
 		for (int i = 0; i < 64; ++i) outStr[i] = DISPLAY_ID_DUPLICATE[i];
 		return 0;
@@ -270,21 +272,26 @@ int SetGrids(char* inStr, char* outStr) {
 			return 0;
 		}
 	}
+	
+	// Apply blends. Note that a single gpu supports only one blended grid. The remaining ports on that gpu can drive solo displays only.
 
-	NvU8 applyBlend = ReadStreamNvU8(inStr, sp);
+	for (int g = 0;g < gridCount;g++) {
 
-	if (applyBlend > 0)
-	{
-		// Implied from grid topo. Any overlap will be blended.
-
-		error = SetBlend(gridTopo[0]);
-
-		if ((error != NVAPI_OK))
+		if (ApplyBlend[g] > 0)
 		{
-			NvAPI_GetErrorMessage(error, message);
-			for (int i = 0; i < 64; ++i) outStr[i] = message[i];
-			return 0;
+			// Implied from grid topo. Any overlap will be blended.
+
+			error = SetBlend(gridTopo[g]);
+
+			if ((error != NVAPI_OK))
+			{
+				NvAPI_GetErrorMessage(error, message);
+				for (int i = 0; i < 64; ++i) outStr[i] = message[i];
+				return 0;
+			}
+
 		}
+
 
 	}
 
@@ -297,6 +304,8 @@ int GetDisplays(char* outStr) {
 
 	// Init nvapi before calling.
 	// Returns a serialised overview of connected displays, their id's and if they have an active intensity mod
+
+	for (int i = 0; i < 64; ++i) outStr[i] = TEST[i];
 
 	NvAPI_Status error;
 	NvAPI_ShortString message = "";
@@ -426,6 +435,7 @@ int GetDisplays(char* outStr) {
 	}
 
 	int sp = 0;
+
 	WriteStreamNvU8(outStr, sp, connected);
 	WriteStreamNvU8(outStr, sp, active);
 	WriteStreamNvU8(outStr, sp, intensity);
@@ -435,6 +445,10 @@ int GetDisplays(char* outStr) {
 		WriteStreamNvU32(outStr, sp, DisplayIdList[d]);
 
 	}
+
+	//	for (int i = 0; i < 256; ++i) outStr[i] = char('X');
+
+		//for (int i = 0; i < 64; ++i) outStr[i] = TEST[i];
 
 	return 1;
 }
@@ -560,9 +574,9 @@ NvAPI_Status SetBlend(NV_MOSAIC_GRID_TOPO topo) {
 
 
 	//float BlendGamma = 0.5f;
-	//float BlendGamma = 0.454f;
+	float BlendGamma = 0.454f;
 
-	float BlendGamma = 1.0f;
+	//float BlendGamma = 1.0f;
 
 	float intensityTexture0[Steps * 3];
 	float intensityTexture1[Steps * 3];

@@ -28,6 +28,7 @@ struct NvGrid {
 	NvU32 width;
 	NvU32 height;
 	NvU32 freq;
+	NvU8 applyBlend;
 	NvDisplay* displays;
 
 };
@@ -35,7 +36,7 @@ struct NvTopo {
 	NvGrid* grids;
 	NvU32 gridCount;
 	NvU8 ApplyGrid;
-	NvU8 ApplyBlend;
+	//NvU8 ApplyBlend;
 
 	bool Matches(NvTopo match)
 	{
@@ -56,7 +57,7 @@ struct NvTopo {
 		}
 
 
-
+		return true;
 
 	}
 
@@ -130,7 +131,7 @@ int main()
 
 
 
-
+		/*
 		NvTopo newTopo = NvTopo{};
 		newTopo.gridCount = 1;
 
@@ -151,6 +152,61 @@ int main()
 		newTopo.grids[0].displays[1].displayId = DisplayIds[3];
 		newTopo.grids[0].displays[1].overlapx = 240;
 		newTopo.grids[0].displays[1].overlapy = 0;
+		*/
+
+		NvTopo newTopo = NvTopo{};
+		newTopo.gridCount = 3;
+
+		newTopo.grids = new NvGrid[newTopo.gridCount];
+		newTopo.grids[0].displayCount = 2;
+		newTopo.grids[0].columns = 2;
+		newTopo.grids[0].rows = 1;
+		newTopo.grids[0].width = 1920;
+		newTopo.grids[0].height = 1200;
+		newTopo.grids[0].freq = 60;
+		newTopo.grids[0].applyBlend = 1;
+
+		newTopo.grids[0].displays = new NvDisplay[newTopo.grids[0].displayCount];
+
+		newTopo.grids[0].displays[0].displayId = DisplayIds[0];
+		newTopo.grids[0].displays[0].overlapx = 0;
+		newTopo.grids[0].displays[0].overlapy = 0;
+		newTopo.grids[0].displays[1].displayId = DisplayIds[1];
+		newTopo.grids[0].displays[1].overlapx = 120;
+		newTopo.grids[0].displays[1].overlapy = 0;
+
+		//
+
+		newTopo.grids[1].displayCount = 1;
+		newTopo.grids[1].columns = 1;
+		newTopo.grids[1].rows = 1;
+		newTopo.grids[1].width = 1920;
+		newTopo.grids[1].height = 1080;
+		newTopo.grids[1].freq = 60;
+		newTopo.grids[1].applyBlend = 0;
+
+		newTopo.grids[1].displays = new NvDisplay[newTopo.grids[1].displayCount];
+
+		newTopo.grids[1].displays[0].displayId = DisplayIds[2];
+		newTopo.grids[1].displays[0].overlapx = 0;
+		newTopo.grids[1].displays[0].overlapy = 0;
+
+		//
+
+		newTopo.grids[2].displayCount = 1;
+		newTopo.grids[2].columns = 1;
+		newTopo.grids[2].rows = 1;
+		newTopo.grids[2].width = 1920;
+		newTopo.grids[2].height = 1080;
+		newTopo.grids[2].freq = 60;
+		newTopo.grids[2].applyBlend = 0;
+
+		newTopo.grids[2].displays = new NvDisplay[newTopo.grids[2].displayCount];
+
+		newTopo.grids[2].displays[0].displayId = DisplayIds[3];
+		newTopo.grids[2].displays[0].overlapx = 0;
+		newTopo.grids[2].displays[0].overlapy = 0;
+
 
 		newTopo.ApplyGrid = 1;
 
@@ -160,42 +216,42 @@ int main()
 			newTopo.ApplyGrid = 0;
 		}
 
-		newTopo.ApplyBlend = 1;
+		//	newTopo.ApplyBlend = 1;
 
-		/*
-				NvTopo dualTopo = NvTopo{};
-				dualTopo.gridCount = 2;
+			/*
+					NvTopo dualTopo = NvTopo{};
+					dualTopo.gridCount = 2;
 
-				dualTopo.grids = new NvGrid[dualTopo.gridCount];
+					dualTopo.grids = new NvGrid[dualTopo.gridCount];
 
-				dualTopo.grids[0].displayCount = 1;
-				dualTopo.grids[0].columns = 1;
-				dualTopo.grids[0].rows = 1;
-				dualTopo.grids[0].width = 1920;
-				dualTopo.grids[0].height = 1080;
-				dualTopo.grids[0].freq = 60;
+					dualTopo.grids[0].displayCount = 1;
+					dualTopo.grids[0].columns = 1;
+					dualTopo.grids[0].rows = 1;
+					dualTopo.grids[0].width = 1920;
+					dualTopo.grids[0].height = 1080;
+					dualTopo.grids[0].freq = 60;
 
-				dualTopo.grids[0].displays = new NvDisplay[dualTopo.grids[0].displayCount];
+					dualTopo.grids[0].displays = new NvDisplay[dualTopo.grids[0].displayCount];
 
-				dualTopo.grids[0].displays[0].displayId = DisplayIds[2];
-				dualTopo.grids[0].displays[0].overlapx = 0;
-				dualTopo.grids[0].displays[0].overlapy = 0;
+					dualTopo.grids[0].displays[0].displayId = DisplayIds[2];
+					dualTopo.grids[0].displays[0].overlapx = 0;
+					dualTopo.grids[0].displays[0].overlapy = 0;
 
-				dualTopo.grids[1].displayCount = 1;
-				dualTopo.grids[1].columns = 1;
-				dualTopo.grids[1].rows = 1;
-				dualTopo.grids[1].width = 1920;
-				dualTopo.grids[1].height = 1080;
-				dualTopo.grids[1].freq = 60;
+					dualTopo.grids[1].displayCount = 1;
+					dualTopo.grids[1].columns = 1;
+					dualTopo.grids[1].rows = 1;
+					dualTopo.grids[1].width = 1920;
+					dualTopo.grids[1].height = 1080;
+					dualTopo.grids[1].freq = 60;
 
-				dualTopo.grids[1].displays = new NvDisplay[dualTopo.grids[0].displayCount];
+					dualTopo.grids[1].displays = new NvDisplay[dualTopo.grids[0].displayCount];
 
-				dualTopo.grids[1].displays[0].displayId = DisplayIds[3];
-				dualTopo.grids[1].displays[0].overlapx = 0;
-				dualTopo.grids[1].displays[0].overlapy = 0;
+					dualTopo.grids[1].displays[0].displayId = DisplayIds[3];
+					dualTopo.grids[1].displays[0].overlapx = 0;
+					dualTopo.grids[1].displays[0].overlapy = 0;
 
-				dualTopo.ApplyGrid = 1;
-				dualTopo.ApplyBlend = 0;*/
+					dualTopo.ApplyGrid = 1;
+					dualTopo.ApplyBlend = 0;*/
 
 
 		char input[CHARSIZE];
@@ -254,6 +310,8 @@ NvTopo DeserialiseTopo(char* input) {
 		cout << "height " << (unsigned int)theTopo.grids[g].height << "\n";
 		cout << "freq " << (unsigned int)theTopo.grids[g].freq << "\n";
 
+		theTopo.grids[g].applyBlend = ReadStreamNvU8(input, sp);// no value when getting from nvapi.
+		
 		theTopo.grids[g].displays = new NvDisplay[theTopo.grids[g].displayCount];
 
 		for (int d = 0;d < theTopo.grids[g].displayCount;d++) {
@@ -268,6 +326,9 @@ NvTopo DeserialiseTopo(char* input) {
 		}
 
 	}
+
+	// last nvu8 is applygrid in our struct, no point reading it here
+
 	return theTopo;
 }
 
@@ -300,6 +361,10 @@ void SerialiseTopo(NvTopo theTopo, char* input) {
 		WriteStreamNvU32(input, sp, theGrid.height);
 		WriteStreamNvU32(input, sp, theGrid.freq);
 
+		// Apply blend?
+
+		WriteStreamNvU8(input, sp, theGrid.applyBlend);
+
 		// Serialise displays
 
 		for (int d = 0;d < theGrid.displayCount;d++)
@@ -319,10 +384,7 @@ void SerialiseTopo(NvTopo theTopo, char* input) {
 	// Apply grid?
 
 	WriteStreamNvU8(input, sp, theTopo.ApplyGrid);
-
-	// Apply blend?
-
-	WriteStreamNvU8(input, sp, theTopo.ApplyBlend);
+	
 
 }
 
