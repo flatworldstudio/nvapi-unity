@@ -264,6 +264,8 @@ int SetGrids(char* inStr, char* outStr) {
 	if (applyGrid > 0)
 	{
 		error = NvAPI_Mosaic_SetDisplayGrids(gridTopo, gridCount, NV_MOSAIC_SETDISPLAYTOPO_FLAG_CURRENT_GPU_TOPOLOGY);
+		//error = NvAPI_Mosaic_SetDisplayGrids(gridTopo, gridCount, NV_MOSAIC_SETDISPLAYTOPO_FLAG_ALLOW_INVALID);
+
 
 		if ((error != NVAPI_OK))
 		{
@@ -272,7 +274,7 @@ int SetGrids(char* inStr, char* outStr) {
 			return 0;
 		}
 	}
-	
+//	return 0;
 	// Apply blends. Note that a single gpu supports only one blended grid. The remaining ports on that gpu can drive solo displays only.
 
 	for (int g = 0;g < gridCount;g++) {
@@ -295,7 +297,7 @@ int SetGrids(char* inStr, char* outStr) {
 
 	}
 
-
+	//return 0;
 	return 1;
 
 }
@@ -523,9 +525,13 @@ void WriteStreamNvS32(char* charArray, int &point, NvS32 value) {
 
 NvAPI_Status SetBlend(NV_MOSAIC_GRID_TOPO topo) {
 
+	
 	//	NV_MOSAIC_GRID_TOPO& Topo = TopoP;
 
 	NvAPI_Status error = NVAPI_OK;
+	//NvAPI_ShortString message = "";
+		;
+
 	NvAPI_ShortString estring;
 
 	NV_SCANOUT_INTENSITY_DATA intensityData0, intensityData1;
@@ -548,6 +554,7 @@ NvAPI_Status SetBlend(NV_MOSAIC_GRID_TOPO topo) {
 	if (topo.displayCount == 2 && topo.columns == 2) {
 
 		overlap = topo.displays[1].overlapX;
+	
 		size = topo.displaySettings.width;
 		intensityData0.width = Steps;
 		intensityData0.height = 1;
@@ -572,6 +579,7 @@ NvAPI_Status SetBlend(NV_MOSAIC_GRID_TOPO topo) {
 	//	NvS32 overlapx = topo.displays[1].overlapX;
 	//	NvU32 width = topo.displaySettings.width;
 
+	overlap = 128;
 
 	//float BlendGamma = 0.5f;
 	float BlendGamma = 0.454f;
@@ -594,6 +602,7 @@ NvAPI_Status SetBlend(NV_MOSAIC_GRID_TOPO topo) {
 		float x = i * step;
 
 		value = x < treshold0 ? 1.0f : pow(1 - ((x - treshold0) / overlap), BlendGamma);
+		//value = 0.5f;
 		//value = x < treshold0 ? 1.0f :1 - ((x - treshold0) / overlapx);
 
 	//	value = pow(1 - ((x - treshold0) / overlapx), BlendGamma);
@@ -603,7 +612,7 @@ NvAPI_Status SetBlend(NV_MOSAIC_GRID_TOPO topo) {
 		intensityTexture0[i * 3 + 2] = value;
 
 		value = x > treshold1 ? 1.0f : pow((x + step) / overlap, BlendGamma);
-
+		//value = 0.5f;
 		intensityTexture1[i * 3 + 0] = value;
 		intensityTexture1[i * 3 + 1] = value;
 		intensityTexture1[i * 3 + 2] = value;
@@ -628,10 +637,12 @@ NvAPI_Status SetBlend(NV_MOSAIC_GRID_TOPO topo) {
 
 	if (error != NVAPI_OK)
 	{
+	//	NvAPI_GetErrorMessage(error, estring);
+	//	for (int i = 0; i < 64; ++i) outStr[i] = message[i];
 		return	error;
 	}
 
-
+	//return NVAPI_SET_NOT_ALLOWED;
 	return error;
 
 }
@@ -683,6 +694,7 @@ extern "C" {
 
 	int GetConnectedDisplays(char* outStr) {
 
+	
 		for (int i = 0;i < CHARSIZE;i++) outStr[i] = 0;
 		// Init
 
@@ -706,6 +718,7 @@ extern "C" {
 
 	int GetGridSetup(char* outStr)
 	{
+	
 		for (int i = 0;i < CHARSIZE;i++) outStr[i] = 0;
 
 		// Init
@@ -727,7 +740,12 @@ extern "C" {
 	}
 
 	int SetGridSetup(char* inStr, char* outStr)
+
+
 	{
+
+		
+
 		for (int i = 0;i < CHARSIZE;i++) outStr[i] = 0;
 
 		// Init

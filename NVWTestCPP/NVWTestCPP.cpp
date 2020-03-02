@@ -115,9 +115,9 @@ int main()
 
 	switch (connected) {
 
-	case 0b00001111:
+	case 0b00000011:
 
-		cout << "Dual desktop plus wall\n";
+		cout << "Dual desktop \n";
 
 		result = GetGridSetup(output);
 
@@ -129,9 +129,6 @@ int main()
 
 		theTopo = DeserialiseTopo(output);
 
-
-
-		/*
 		NvTopo newTopo = NvTopo{};
 		newTopo.gridCount = 1;
 
@@ -142,18 +139,19 @@ int main()
 		newTopo.grids[0].width = 1920;
 		newTopo.grids[0].height = 1080;
 		newTopo.grids[0].freq = 60;
+		newTopo.grids[0].applyBlend = 1;
 
 		newTopo.grids[0].displays = new NvDisplay[newTopo.grids[0].displayCount];
 
-		newTopo.grids[0].displays[0].displayId = DisplayIds[2];
+		newTopo.grids[0].displays[0].displayId = DisplayIds[0];
 		newTopo.grids[0].displays[0].overlapx = 0;
 		newTopo.grids[0].displays[0].overlapy = 0;
 
-		newTopo.grids[0].displays[1].displayId = DisplayIds[3];
-		newTopo.grids[0].displays[1].overlapx = 240;
+		newTopo.grids[0].displays[1].displayId = DisplayIds[1];
+		newTopo.grids[0].displays[1].overlapx = 120;
 		newTopo.grids[0].displays[1].overlapy = 0;
-		*/
-
+		
+		/*
 		NvTopo newTopo = NvTopo{};
 		newTopo.gridCount = 3;
 
@@ -164,7 +162,7 @@ int main()
 		newTopo.grids[0].width = 1920;
 		newTopo.grids[0].height = 1200;
 		newTopo.grids[0].freq = 60;
-		newTopo.grids[0].applyBlend = 1;
+		newTopo.grids[0].applyBlend = 0;
 
 		newTopo.grids[0].displays = new NvDisplay[newTopo.grids[0].displayCount];
 
@@ -172,7 +170,7 @@ int main()
 		newTopo.grids[0].displays[0].overlapx = 0;
 		newTopo.grids[0].displays[0].overlapy = 0;
 		newTopo.grids[0].displays[1].displayId = DisplayIds[1];
-		newTopo.grids[0].displays[1].overlapx = 120;
+		newTopo.grids[0].displays[1].overlapx = 0;
 		newTopo.grids[0].displays[1].overlapy = 0;
 
 		//
@@ -207,16 +205,17 @@ int main()
 		newTopo.grids[2].displays[0].overlapx = 0;
 		newTopo.grids[2].displays[0].overlapy = 0;
 
-
+		*/
 		newTopo.ApplyGrid = 1;
 
 		if (theTopo.Matches(newTopo))
 		{
-			cout << "MATCH\n";
-			newTopo.ApplyGrid = 0;
+			cout << "Topo already set\n";
+	newTopo.ApplyGrid = 0;
 		}
 
-		//	newTopo.ApplyBlend = 1;
+		//	newTopo.ApplyBlend = 0;
+
 
 			/*
 					NvTopo dualTopo = NvTopo{};
@@ -259,6 +258,8 @@ int main()
 		SerialiseTopo(newTopo, input);
 
 		result = SetGridSetup(input, output);
+
+	//	cout << result;
 
 		if (result == 0) {
 			cout << "Failed\n";
