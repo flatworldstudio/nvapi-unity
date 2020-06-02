@@ -18,34 +18,43 @@ void WriteStreamNvU32(char* charArray, int &point, NvU32 value);
 
 NvAPI_Status SetBlend(NV_MOSAIC_GRID_TOPO topo);
 
+NvAPI_ShortString INITIALISED = "NvApi initialised.";
 NvAPI_ShortString OUT_OF_RANGE = "Display index out of range.";
 NvAPI_ShortString DISPLAY_ID_DUPLICATE = "Display ID used more than once.";
 NvAPI_ShortString DISPLAY_INVALID_GRID = "Grid invalid.";
-NvAPI_ShortString TEST = "TEST TEST TESTTESTTESTTESTTETESTTESTTESTTESTTESTTESTTEST.";
+NvAPI_ShortString TEST = "Test ..............................................";
 
 // Wrapper for NvApi.
 
-int NVInit(char* outStr) {
 
-	// Initialize NVAPI
+// ---------------------------- Internal methods. ----------------------------
+
+int NvInit(char* outStr) {
+
+	// Initialize NVAPI, fill outStr with status message, return 1 for success.
 
 	NvAPI_Status error;
 	NvAPI_ShortString result = "";
 	error = NvAPI_Initialize();
 
-	if ((error != NVAPI_OK))
+	if (error != NVAPI_OK)
 	{
 		NvAPI_GetErrorMessage(error, result);
 		for (int i = 0; i < 64; ++i) outStr[i] = result[i];
 		return 0;
 	}
 
+	for (int i = 0; i < 64; ++i) outStr[i] = INITIALISED[i];
+
 	return 1;
 }
 
-int GetGrids(char* outStr) {
 
-	// Init nvapi before calling. Returns serialised info on grid.
+
+int NvGetGrids(char* outStr) {
+
+	// Make sure to init nvapi before calling. Fills outstr with serialised info on current grids.
+// see readme for how data is serialised
 
 	NvAPI_Status error;
 	NvAPI_ShortString message = "";
@@ -80,7 +89,6 @@ int GetGrids(char* outStr) {
 		WriteStreamNvU8(outStr, sp, numColumns);
 		WriteStreamNvU8(outStr, sp, numRows);
 
-
 		NV_MOSAIC_DISPLAY_SETTING& ds = gridTopo[iGrid].displaySettings;
 
 		WriteStreamNvU32(outStr, sp, ds.width);
@@ -101,13 +109,16 @@ int GetGrids(char* outStr) {
 
 	}
 
-	WriteStreamNvU8(outStr, sp,0);// write void for applygrid field. (just for symmetry)
+	WriteStreamNvU8(outStr, sp, 0);// write void for applygrid field. (just for symmetry)
 
 	return 1;
 }
 
 
-int SetGrids(char* inStr, char* outStr) {
+int NvSetGrids(char* inStr, char* outStr) {
+
+	// Make sure to init nvapi before calling. Sets grids based on instr serialised data.
+// see readme for how data is serialised
 
 	NvAPI_Status error;
 	NvAPI_ShortString message = "";
@@ -274,8 +285,8 @@ int SetGrids(char* inStr, char* outStr) {
 			return 0;
 		}
 	}
-//	return 0;
-	// Apply blends. Note that a single gpu supports only one blended grid. The remaining ports on that gpu can drive solo displays only.
+	//	return 0;
+		// Apply blends. Note that a single gpu supports only one blended grid. The remaining ports on that gpu can drive solo displays only.
 
 	for (int g = 0;g < gridCount;g++) {
 
@@ -302,10 +313,11 @@ int SetGrids(char* inStr, char* outStr) {
 
 }
 
-int GetDisplays(char* outStr) {
+int NvGetHardware(char* outStr) {
 
 	// Init nvapi before calling.
-	// Returns a serialised overview of connected displays, their id's and if they have an active intensity mod
+	// Fills outstr a serialised overview of connected display hardware
+	// see readme for serialisation
 
 	for (int i = 0; i < 64; ++i) outStr[i] = TEST[i];
 
@@ -410,24 +422,6 @@ int GetDisplays(char* outStr) {
 				}
 
 
-				/*
-				//	error = NvAPI_GPU_GetScanoutIntensityState(dispIds[dispIndex].displayId, &intensityState);
-
-				//	error = NvAPI_GPU_GetScanoutIntensityState(displayId, &intensityState);
-
-
-				error = NvAPI_GPU_GetScanoutIntensityState(2147881093, &intensityState);
-				//	error = NVAPI_OK;
-
-				if (error != NVAPI_OK)
-				{
-					NvAPI_GetErrorMessage(error, message);
-					for (int i = 0; i < 64; ++i) outStr[i] = message[i];
-					return 0;
-				}
-
-				if (intensityState.bEnabled) intensityActive |= 1 << i;
-				*/
 			}
 			else
 			{
@@ -442,11 +436,24 @@ int GetDisplays(char* outStr) {
 	WriteStreamNvU8(outStr, sp, active);
 	WriteStreamNvU8(outStr, sp, intensity);
 
-	for (int d = 0;d < DisplaysPerGpu*gpuCount;d++) {
+	// zero out the data for 8 displays
 
-		WriteStreamNvU32(outStr, sp, DisplayIdList[d]);
-
+	for (int d = 0;d < 8;d++) {
+		if (d < DisplaysPerGpu*gpuCount) {
+			// we should have an id
+			WriteStreamNvU32(outStr, sp, DisplayIdList[d]);
+		}
+		else {
+			// 0
+			WriteStreamNvU32(outStr, sp, 0);
+		}
 	}
+
+	//for (int d = 0;d < DisplaysPerGpu*gpuCount;d++) {
+
+	//	WriteStreamNvU32(outStr, sp, DisplayIdList[d]);
+
+	//}
 
 	//	for (int i = 0; i < 256; ++i) outStr[i] = char('X');
 
@@ -455,6 +462,99 @@ int GetDisplays(char* outStr) {
 	return 1;
 }
 
+
+
+
+
+// ---------------------------- External methods. ----------------------------
+
+// Describe externally available methods
+
+extern "C" {
+
+	// Returns success bool and fills outstr with data on connected hardware
+	// see readme for serialisation
+
+	int GetHardware(char* outStr) {
+
+
+		for (int i = 0;i < CHARSIZE;i++) outStr[i] = 0;
+
+		// Init
+
+		if (NvInit(outStr) == 0) {
+			NvAPI_Unload();
+			return 0;
+		}
+
+		// Execute
+
+		if (NvGetHardware(outStr) == 0) {
+			NvAPI_Unload();
+			return 0;
+		}
+
+		NvAPI_Unload();
+
+		return 1;
+	}
+
+
+	int GetGrids(char* outStr)
+	{
+
+		for (int i = 0;i < CHARSIZE;i++) outStr[i] = 0;
+
+		// Init
+
+		if (NvInit(outStr) == 0) {
+			NvAPI_Unload();
+			return 0;
+		}
+
+		if (NvGetGrids(outStr) == 0) {
+			NvAPI_Unload();
+			return 0;
+		}
+
+		NvAPI_Unload();
+
+		return 1;
+
+	}
+
+	int SetGrids(char* inStr, char* outStr)
+
+	{
+
+		for (int i = 0;i < CHARSIZE;i++) outStr[i] = 0;
+
+		// Init, if fail, unload and return fail.
+
+		if (NvInit(outStr) == 0) {
+			NvAPI_Unload();
+			return 0;
+		}
+
+		if (NvSetGrids(inStr, outStr) == 0) {
+			NvAPI_Unload();
+			return 0;
+		}
+
+		NvAPI_Unload();
+
+		return 1;
+
+	}
+
+
+}
+
+
+
+
+
+// ---------------------------- Internal low level methods. ----------------------------
 
 NvU8 ReadStreamNvU8(char* charArray, int &point) {
 	point++;
@@ -467,7 +567,6 @@ void WriteStreamNvU8(char* charArray, int &point, NvU8 theChar) {
 	point++;
 	point = point % CHARSIZE; // 
 }
-
 
 NvU32 ReadStreamNvU32(char* charArray, int &point) {
 
@@ -499,7 +598,6 @@ void WriteStreamNvU32(char* charArray, int &point, NvU32 value) {
 
 NvS32 ReadStreamNvS32(char* charArray, int &point) {
 
-
 	NvS32 value = charArray[point + 0] + charArray[point + 1] << 8 + charArray[point + 2] << 16 + charArray[point + 3] << 24;
 
 	point += 4;
@@ -516,21 +614,21 @@ void WriteStreamNvS32(char* charArray, int &point, NvS32 value) {
 	charArray[point + 2] = (value & 0x00ff0000) >> 16;
 	charArray[point + 3] = (value & 0xff000000) >> 24;
 
-
 	point += 4;
 	point = point % CHARSIZE; // 
 
 }
 
 
+
 NvAPI_Status SetBlend(NV_MOSAIC_GRID_TOPO topo) {
 
-	
+
 	//	NV_MOSAIC_GRID_TOPO& Topo = TopoP;
 
 	NvAPI_Status error = NVAPI_OK;
 	//NvAPI_ShortString message = "";
-		;
+	;
 
 	NvAPI_ShortString estring;
 
@@ -554,7 +652,7 @@ NvAPI_Status SetBlend(NV_MOSAIC_GRID_TOPO topo) {
 	if (topo.displayCount == 2 && topo.columns == 2) {
 
 		overlap = topo.displays[1].overlapX;
-	
+
 		size = topo.displaySettings.width;
 		intensityData0.width = Steps;
 		intensityData0.height = 1;
@@ -637,8 +735,8 @@ NvAPI_Status SetBlend(NV_MOSAIC_GRID_TOPO topo) {
 
 	if (error != NVAPI_OK)
 	{
-	//	NvAPI_GetErrorMessage(error, estring);
-	//	for (int i = 0; i < 64; ++i) outStr[i] = message[i];
+		//	NvAPI_GetErrorMessage(error, estring);
+		//	for (int i = 0; i < 64; ++i) outStr[i] = message[i];
 		return	error;
 	}
 
@@ -647,128 +745,4 @@ NvAPI_Status SetBlend(NV_MOSAIC_GRID_TOPO topo) {
 
 }
 
-//
-
-extern "C" {
-
-	// 
-//
-//	int CheckConfig(char* outStr) {
-//
-//		// Init
-//
-//		if (NVInit(outStr) == 0) {
-//			NvAPI_Unload();
-//			return 0;
-//		}
-//
-//		// Execute
-//
-//		if (GetDisplays(outStr) == 0) {
-//			NvAPI_Unload();
-//			return 0;
-//		}
-//
-//		//outStr[0] = 'a' ;
-//
-//		/*switch (outStr[0]) {
-//		case 0x00011111:
-//
-//			break;
-//		default:
-//			break;
-//		}
-//*/
-//// Unload
-//
-//		NvAPI_Unload();
-//
-//		return 1;
-//
-//
-//
-//	}
-//
-	// Returns success bool and a string of 0 and 1 for 8 connected displays
-	// char[8] is a single byte with the same info encoded in bits
-
-	int GetConnectedDisplays(char* outStr) {
-
-	
-		for (int i = 0;i < CHARSIZE;i++) outStr[i] = 0;
-		// Init
-
-		if (NVInit(outStr) == 0) {
-			NvAPI_Unload();
-			return 0;
-		}
-
-		// Execute
-
-		if (GetDisplays(outStr) == 0) {
-			NvAPI_Unload();
-			return 0;
-		}
-
-		NvAPI_Unload();
-
-		return 1;
-	}
-
-
-	int GetGridSetup(char* outStr)
-	{
-	
-		for (int i = 0;i < CHARSIZE;i++) outStr[i] = 0;
-
-		// Init
-
-		if (NVInit(outStr) == 0) {
-			NvAPI_Unload();
-			return 0;
-		}
-
-		if (GetGrids(outStr) == 0) {
-			NvAPI_Unload();
-			return 0;
-		}
-
-		NvAPI_Unload();
-
-		return 1;
-
-	}
-
-	int SetGridSetup(char* inStr, char* outStr)
-
-
-	{
-
-		
-
-		for (int i = 0;i < CHARSIZE;i++) outStr[i] = 0;
-
-		// Init
-
-		if (NVInit(outStr) == 0) {
-			NvAPI_Unload();
-			return 0;
-		}
-
-		if (SetGrids(inStr, outStr) == 0) {
-			NvAPI_Unload();
-			return 0;
-		}
-
-		NvAPI_Unload();
-
-		return 1;
-
-	}
-
-
-
-
-
-}
 

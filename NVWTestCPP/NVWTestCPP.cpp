@@ -82,7 +82,7 @@ int main()
 	char output[CHARSIZE];
 	int result;
 
-	result = GetConnectedDisplays(output);
+	result = GetHardware(output);
 
 	if (result == 0) {
 		cout << "Connected Displays Failed\n";
@@ -119,7 +119,7 @@ int main()
 
 		cout << "Dual desktop \n";
 
-		result = GetGridSetup(output);
+		result = GetGrids(output);
 
 		if (result == 0) {
 			cout << "Get grid setup failed\n";
@@ -257,7 +257,7 @@ int main()
 
 		SerialiseTopo(newTopo, input);
 
-		result = SetGridSetup(input, output);
+		result = SetGrids(input, output);
 
 	//	cout << result;
 
